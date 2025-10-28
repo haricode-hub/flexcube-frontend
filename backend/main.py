@@ -32,15 +32,23 @@ class FormData(BaseModel):
 DATA_REPO_URL = "https://github.com/jmrdevops/FCUBS_CASA.git"
 # Set this env var with jmrdevops token
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-TEMP_REPO_DIR = None
+TEMP_REPO_DIR = os.path.join(os.getcwd(), "temp_repo")
 
 
 def setup_data_repo():
     global TEMP_REPO_DIR
-    if TEMP_REPO_DIR and os.path.exists(TEMP_REPO_DIR):
-        return  # Already set up
+    if os.path.exists(TEMP_REPO_DIR):
+        # Check if it's already a git repo
+        if os.path.exists(os.path.join(TEMP_REPO_DIR, ".git")):
+            print(f"Data repo already exists at {TEMP_REPO_DIR}")
+            return  # Already set up
+        else:
+            # Remove if exists but not git repo
+            shutil.rmtree(TEMP_REPO_DIR)
 
-    TEMP_REPO_DIR = tempfile.mkdtemp(prefix="fcubs_data_")
+    # Create directory
+    os.makedirs(TEMP_REPO_DIR, exist_ok=True)
+
     repo_url_with_token = DATA_REPO_URL.replace(
         "https://", f"https://jmrdevops:{GITHUB_TOKEN}@") if GITHUB_TOKEN else DATA_REPO_URL
 
@@ -49,6 +57,29 @@ def setup_data_repo():
         subprocess.run(["git", "clone", repo_url_with_token,
                        TEMP_REPO_DIR], check=True, capture_output=True)
         print(f"Cloned data repo to {TEMP_REPO_DIR}")
+
+        # Create src folder if it doesn't exist
+        src_dir = os.path.join(TEMP_REPO_DIR, "src")
+        os.makedirs(src_dir, exist_ok=True)
+
+        # Ensure data.csv exists in src/
+        csv_file = os.path.join(src_dir, "data.csv")
+        if not os.path.exists(csv_file):
+            with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(["timestamp", "endpoint", "form_data"])
+
+        # Copy frontend app folder to temp_repo/app/
+        frontend_app_dir = os.path.join(os.getcwd(), "..", "app")
+        repo_app_dir = os.path.join(TEMP_REPO_DIR, "app")
+        if os.path.exists(frontend_app_dir):
+            if os.path.exists(repo_app_dir):
+                shutil.rmtree(repo_app_dir)
+            shutil.copytree(frontend_app_dir, repo_app_dir)
+            print(f"Copied frontend app to {repo_app_dir}")
+        else:
+            print("Warning: Frontend app directory not found")
+
     except subprocess.CalledProcessError as e:
         print(f"Failed to clone repo: {e}")
         raise HTTPException(
@@ -81,14 +112,14 @@ async def submit_form(form_data: FormData):
         subprocess.run(["git", "pull", "origin", "main"],
                        cwd=TEMP_REPO_DIR, check=True, capture_output=True)
 
-        # Append to CSV in repo
-        csv_file_path = os.path.join(TEMP_REPO_DIR, "data.csv")
+        # Append to CSV in repo src/
+        csv_file_path = os.path.join(TEMP_REPO_DIR, "src", "data.csv")
         with open(csv_file_path, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow([timestamp, endpoint, data_str])
 
-        # Git add, commit, push
-        subprocess.run(["git", "add", "data.csv"],
+        # Git add, commit, push src/ and app/ folders
+        subprocess.run(["git", "add", "src/", "app/"],
                        cwd=TEMP_REPO_DIR, check=True)
         subprocess.run(
             ["git", "commit", "-m", f"Add form data submission at {timestamp}"], cwd=TEMP_REPO_DIR, check=True)
@@ -116,7 +147,7 @@ async def get_form_data():
                        cwd=TEMP_REPO_DIR, check=True, capture_output=True)
 
         data = []
-        csv_file_path = os.path.join(TEMP_REPO_DIR, "data.csv")
+        csv_file_path = os.path.join(TEMP_REPO_DIR, "src", "data.csv")
         if os.path.exists(csv_file_path):
             with open(csv_file_path, 'r', newline='', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
