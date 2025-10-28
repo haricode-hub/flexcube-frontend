@@ -7,8 +7,24 @@ import { SwaggerSchema, SwaggerDefinition, ServiceSchema, FieldDefinition } from
 export function parseSwaggerSchema(swagger: SwaggerSchema, serviceName: string): ServiceSchema {
   const fields: FieldDefinition[] = [];
   const fieldNames = new Set<string>(); // To avoid duplicates
+  const endpoints: ApiEndpoint[] = [];
 
-  // 1. Extract parameters from API paths (headers, query params, body params)
+  // 1. Extract endpoints from API paths
+  if (swagger.paths) {
+    Object.entries(swagger.paths).forEach(([path, pathItem]: [string, any]) => {
+      Object.entries(pathItem).forEach(([method, operation]: [string, any]) => {
+        if (typeof operation === 'object' && operation.summary) {
+          endpoints.push({
+            path: (swagger.basePath || '') + path,
+            method: method.toUpperCase(),
+            summary: operation.summary
+          });
+        }
+      });
+    });
+  }
+
+  // 2. Extract parameters from API paths (headers, query params, body params)
   if (swagger.paths) {
     Object.values(swagger.paths).forEach((pathItem: any) => {
       Object.values(pathItem).forEach((operation: any) => {
@@ -57,7 +73,7 @@ export function parseSwaggerSchema(swagger: SwaggerSchema, serviceName: string):
     }
   }
 
-  return { serviceName, fields };
+  return { serviceName, fields, endpoints };
 }
 
 /**

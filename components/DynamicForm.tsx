@@ -48,6 +48,7 @@ export default function DynamicForm({ schema }: DynamicFormProps) {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [submittedData, setSubmittedData] = useState<Record<string, any> | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [selectedEndpoint, setSelectedEndpoint] = useState<string>('');
 
   const handleChange = (name: string, value: any) => {
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -64,6 +65,10 @@ export default function DynamicForm({ schema }: DynamicFormProps) {
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
+    if (schema.endpoints.length > 0 && !selectedEndpoint) {
+      newErrors.endpoint = 'Please select an endpoint checkpoint';
+    }
+
     schema.fields.forEach(field => {
       if (field.required && !formData[field.name]) {
         newErrors[field.name] = `${formatFieldLabel(field.name)} is required`;
@@ -74,12 +79,32 @@ export default function DynamicForm({ schema }: DynamicFormProps) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
     if (validateForm()) {
-      setSubmittedData(formData);
-      console.log('Form submitted:', formData);
+      const dataToSubmit = { selectedEndpoint, data: formData };
+
+      try {
+        const response = await fetch('http://localhost:8000/submit-form', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(dataToSubmit),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          setSubmittedData({ ...dataToSubmit, serverResponse: result });
+          console.log('Form submitted successfully:', result);
+        } else {
+          const error = await response.text();
+          setErrors({ submit: `Submission failed: ${error}` });
+        }
+      } catch (error) {
+        setErrors({ submit: `Network error: ${error.message}` });
+      }
     }
   };
 
@@ -87,6 +112,7 @@ export default function DynamicForm({ schema }: DynamicFormProps) {
     setFormData({});
     setSubmittedData(null);
     setErrors({});
+    setSelectedEndpoint('');
   };
 
   const renderField = (field: FieldDefinition) => {
@@ -200,6 +226,35 @@ export default function DynamicForm({ schema }: DynamicFormProps) {
           </p>
         </div>
 
+        {/* Checkpoints - Available Endpoints */}
+        {schema.endpoints.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-blue-900 mb-3">Available Checkpoints (Endpoints)</h3>
+            <div className="space-y-2">
+              {schema.endpoints.map((endpoint, index) => (
+                <div key={index} className="flex items-center space-x-3">
+                  <input
+                    type="radio"
+                    id={`endpoint-${index}`}
+                    name="selectedEndpoint"
+                    value={`${endpoint.method} ${endpoint.path}`}
+                    checked={selectedEndpoint === `${endpoint.method} ${endpoint.path}`}
+                    onChange={(e) => setSelectedEndpoint(e.target.value)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <label htmlFor={`endpoint-${index}`} className="text-sm text-blue-800">
+                    <span className="font-medium">{endpoint.method}</span> {endpoint.path}
+                    {endpoint.summary && <span className="text-blue-600 ml-2">- {endpoint.summary}</span>}
+                  </label>
+                </div>
+              ))}
+            </div>
+            {errors.endpoint && (
+              <p className="mt-2 text-xs text-red-500">{errors.endpoint}</p>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {schema.fields.map((field) => (
             <div key={field.name} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
@@ -244,9 +299,22 @@ export default function DynamicForm({ schema }: DynamicFormProps) {
           <h3 className="text-lg font-semibold text-green-900 mb-4">
             Submitted Data
           </h3>
+          {submittedData.serverResponse && (
+            <div className="mb-4 p-3 bg-green-100 rounded">
+              <p className="text-green-800 font-medium">✓ Data saved to CSV successfully</p>
+              <p className="text-sm text-green-600">Timestamp: {submittedData.serverResponse.timestamp}</p>
+            </div>
+          )}
           <pre className="bg-white p-4 rounded border border-green-200 overflow-x-auto">
             {JSON.stringify(submittedData, null, 2)}
           </pre>
+        </div>
+      )}
+
+      {/* Error Display */}
+      {errors.submit && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800">{errors.submit}</p>
         </div>
       )}
     </div>

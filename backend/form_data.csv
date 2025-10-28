@@ -1,0 +1,2 @@
+timestamp,endpoint,form_data
+2025-10-28T11:24:43.692945,POST /AccountClassBranchTransferService//AccountClassBranchTransfer/DeleteAcltr,"{'BRANCH': '005', 'USERID': 'ABCD', 'SOURCE': '33', 'transferId': '3456', 'accountClass': 'personal', 'curentBranchCode': '000', 'targetBranchCode': '000', 'transferDate': '09-05-2025'}"

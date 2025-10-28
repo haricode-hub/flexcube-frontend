@@ -9,9 +9,16 @@ export interface FieldDefinition {
   defaultValue?: string | number | boolean;
 }
 
+export interface ApiEndpoint {
+  path: string;
+  method: string;
+  summary?: string;
+}
+
 export interface ServiceSchema {
   serviceName: string;
   fields: FieldDefinition[];
+  endpoints: ApiEndpoint[];
   definitions?: Record<string, any>;
 }
 
