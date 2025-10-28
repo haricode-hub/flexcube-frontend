@@ -50,7 +50,7 @@ uv sync
 ### Terminal 1: Start Backend
 ```bash
 cd backend
-uv run uvicorn main:app --reload
+uv run uvicorn app:app --reload
 ```
 Backend will run on http://localhost:8000
 
@@ -82,7 +82,7 @@ Frontend will run on http://localhost:3000
 flexcube-frontend/
 ├── app/                    # Next.js app directory
 ├── backend/                # FastAPI backend
-│   ├── main.py            # Main FastAPI app
+│   ├── app.py             # Main FastAPI app
 │   ├── .env               # Environment variables
 │   └── pyproject.toml     # Python dependencies
 ├── components/            # React components

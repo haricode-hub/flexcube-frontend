@@ -58,6 +58,23 @@ def setup_data_repo():
                        TEMP_REPO_DIR], check=True, capture_output=True)
         print(f"Cloned data repo to {TEMP_REPO_DIR}")
 
+        # Configure a local git identity in the cloned repo so commits succeed.
+        # Prefer env vars GIT_USER_NAME / GIT_USER_EMAIL if provided, else use safe defaults.
+        git_user_name = os.getenv("GIT_USER_NAME", "jmrdevops")
+        git_user_email = os.getenv(
+            "GIT_USER_EMAIL", "jmrdevops@jmrinfotech.com")
+        try:
+            subprocess.run(["git", "config", "user.email", git_user_email],
+                           cwd=TEMP_REPO_DIR, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", git_user_name],
+                           cwd=TEMP_REPO_DIR, check=True, capture_output=True)
+            print(
+                f"Configured git user.name={git_user_name} and user.email={git_user_email} in repo")
+        except subprocess.CalledProcessError as e:
+            # Non-fatal: print a warning but don't raise here so the app can still start.
+            stderr = e.stderr.decode() if getattr(e, 'stderr', None) else str(e)
+            print(f"Warning: failed to set git config in repo: {stderr}")
+
         # Create src folder if it doesn't exist
         src_dir = os.path.join(TEMP_REPO_DIR, "src")
         os.makedirs(src_dir, exist_ok=True)
@@ -79,9 +96,10 @@ def setup_data_repo():
             print(f"Copied frontend app to {repo_app_dir}")
         else:
             print("Warning: Frontend app directory not found")
-
     except subprocess.CalledProcessError as e:
-        print(f"Failed to clone repo: {e}")
+        # Provide useful debug info when cloning fails
+        stderr = e.stderr.decode() if getattr(e, 'stderr', None) else str(e)
+        print(f"Failed to clone repo: {stderr}")
         raise HTTPException(
             status_code=500, detail="Failed to setup data repository")
 
@@ -129,8 +147,9 @@ async def submit_form(form_data: FormData):
         return {"message": "Form data saved to repository successfully", "timestamp": timestamp}
 
     except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode() if getattr(e, 'stderr', None) else str(e)
         raise HTTPException(
-            status_code=500, detail=f"Git operation failed: {e.stderr.decode()}")
+            status_code=500, detail=f"Git operation failed: {stderr}")
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error saving data: {str(e)}")
@@ -155,8 +174,9 @@ async def get_form_data():
                     data.append(row)
         return {"data": data}
     except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode() if getattr(e, 'stderr', None) else str(e)
         raise HTTPException(
-            status_code=500, detail=f"Git operation failed: {e.stderr.decode()}")
+            status_code=500, detail=f"Git operation failed: {stderr}")
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error reading data: {str(e)}")
