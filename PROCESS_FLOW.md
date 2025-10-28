@@ -27,28 +27,28 @@ This document explains how the entire FLEXCUBE Automation system works, from sta
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    FLEXCUBE Automation                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌──────────────┐      ┌──────────────┐                   │
-│  │   Frontend   │◄─────┤   Next.js    │                   │
-│  │  (React UI)  │      │  App Router  │                   │
-│  └──────────────┘      └──────────────┘                   │
-│         │                      ▲                            │
-│         ▼                      │                            │
-│  ┌──────────────┐      ┌──────────────┐                   │
-│  │  API Routes  │◄─────┤  File System │                   │
-│  │   (Next.js)  │      │   (swagger)  │                   │
-│  └──────────────┘      └──────────────┘                   │
-│         │                      ▲                            │
-│         ▼                      │                            │
-│  ┌──────────────┐      ┌──────────────┐                   │
-│  │    Schema    │      │  Rest Docs   │                   │
-│  │    Parser    │─────►│   Folder     │                   │
-│  └──────────────┘      └──────────────┘                   │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                     FLEXCUBE Automation                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌──────────────┐      ┌──────────────┐      ┌──────────────┐     │
+│  │   Frontend   │◄─────┤   Next.js    │      │   FastAPI    │     │
+│  │  (React UI)  │      │  App Router  │◄─────┤   Backend    │     │
+│  └──────────────┘      └──────────────┘      └──────────────┘     │
+│         │                      ▲                      ▲             │
+│         ▼                      │                      │             │
+│  ┌──────────────┐      ┌──────────────┐      ┌──────────────┐     │
+│  │  API Routes  │◄─────┤  File System │      │   Git Repo   │     │
+│  │   (Next.js)  │      │   (swagger)  │      │ (FCUBS_CASA) │     │
+│  └──────────────┘      └──────────────┘      └──────────────┘     │
+│         │                      ▲                      ▲             │
+│         ▼                      │                      │             │
+│  ┌──────────────┐      ┌──────────────┐      ┌──────────────┐     │
+│  │    Schema    │      │  Rest Docs   │      │   GitHub     │     │
+│  │    Parser    │─────►│   Folder     │      │   (jmrdevops)│     │
+│  └──────────────┘      └──────────────┘      └──────────────┘     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -253,7 +253,7 @@ The DynamicForm component (`components/DynamicForm.tsx`) receives the schema:
 
 ---
 
-### **Step 8: Form Submission & Display**
+### **Step 8: Form Submission**
 
 1. User clicks "Submit" button
 2. Form validation runs
@@ -261,27 +261,41 @@ The DynamicForm component (`components/DynamicForm.tsx`) receives the schema:
    - Error messages appear below fields
    - Fields with errors get red border
 4. If validation passes:
-   - Form data is captured
-   - Data displayed in JSON format below form
-   - Console.log also prints data
+   - Form data sent to FastAPI backend at `http://localhost:8000/submit-form`
+   - Backend processes data and pushes to FCUBS_CASA git repo
+   - Success/error response displayed
 
 ```javascript
-const handleSubmit = (e) => {
+const handleSubmit = async (e) => {
   e.preventDefault();
   if (validateForm()) {
-    setSubmittedData(formData);
-    console.log('Form submitted:', formData);
+    const response = await fetch('http://localhost:8000/submit-form', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ selectedEndpoint, data: formData })
+    });
+    if (response.ok) {
+      const result = await response.json();
+      setSubmittedData({ ...formData, serverResponse: result });
+    } else {
+      setErrors({ submit: 'Submission failed' });
+    }
   }
 };
 ```
 
-**Display Format**:
-```json
-{
-  "customerId": "12345",
-  "accountType": "Savings",
-  "balance": 1000
-}
+### **Step 9: Data Storage in Git Repo**
+
+1. FastAPI backend clones/pulls FCUBS_CASA repo
+2. Appends form data to `data.csv` in repo
+3. Commits with message "Add form data submission"
+4. Pushes to https://github.com/jmrdevops/FCUBS_CASA.git
+5. Data permanently stored in version-controlled git repository
+
+**CSV Format**:
+```csv
+timestamp,endpoint,form_data
+2025-01-28T10:30:00,GET /AccountBalance/getBalance/custAcNo/{custAcNo},"{""custAcNo"": ""12345"", ""amount"": 1000}"
 ```
 
 ---
@@ -417,20 +431,35 @@ const handleSubmit = (e) => {
 ┌─────────────────────────────────┐
 │  11. User Clicks Submit         │
 │      - Validate all fields      │
-│      - Show errors OR success   │
+│      - Send to FastAPI backend  │
 └────┬────────────────────────────┘
      │
      ▼
 ┌─────────────────────────────────┐
-│  12. Display Submitted Data     │
-│      - JSON format below form   │
-│      - Console.log output       │
+│  12. Backend Processes          │
+│      - Clone FCUBS_CASA repo    │
+│      - Append to data.csv       │
+│      - Git commit & push        │
+└────┬────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────────┐
+│  13. Data Stored in Git         │
+│      - Version controlled       │
+│      - Accessible remotely      │
+│      - Audit trail available    │
 └─────────────────────────────────┘
 ```
 
 ---
 
 ## 🛣️ API Routes
+
+### **Frontend API Routes (Next.js)**
+
+---
+
+### **GET /api/services**
 
 ### **GET /api/services**
 
@@ -488,6 +517,63 @@ const handleSubmit = (e) => {
 
 ---
 
+### **Backend API Routes (FastAPI)**
+
+#### **POST /submit-form**
+
+**Purpose**: Submit form data and store in git repository
+
+**Implementation**: `backend/main.py`
+
+**Process**:
+1. Receive form data with selected endpoint
+2. Pull latest changes from FCUBS_CASA repo
+3. Append data row to `data.csv`
+4. Git add, commit with timestamp, push to repo
+
+**Request Body**:
+```json
+{
+  "selectedEndpoint": "GET /AccountBalance/getBalance/custAcNo/{custAcNo}",
+  "data": {
+    "custAcNo": "12345",
+    "amount": 1000
+  }
+}
+```
+
+**Response**:
+```json
+{
+  "message": "Form data saved to repository successfully",
+  "timestamp": "2025-01-28T10:30:00"
+}
+```
+
+#### **GET /form-data**
+
+**Purpose**: Retrieve all submitted form data from repository
+
+**Process**:
+1. Pull latest changes from FCUBS_CASA repo
+2. Read and parse `data.csv`
+3. Return array of submissions
+
+**Response**:
+```json
+{
+  "data": [
+    {
+      "timestamp": "2025-01-28T10:30:00",
+      "endpoint": "GET /AccountBalance/getBalance/custAcNo/{custAcNo}",
+      "form_data": "{\"custAcNo\": \"12345\", \"amount\": 1000}"
+    }
+  ]
+}
+```
+
+---
+
 ## 👤 User Journey
 
 ### **Scenario: User wants to submit data for "CustomerAccountService"**
@@ -520,20 +606,21 @@ const handleSubmit = (e) => {
 
 10. **Validation**: All required fields checked
 
-11. **Success**: Submitted data appears below form in JSON:
-    ```json
-    {
-      "customerId": "12345",
-      "accountType": "Savings",
-      "balance": 1000,
-      "description": "New savings account"
-    }
+11. **Backend Processing**: Data sent to FastAPI backend, stored in FCUBS_CASA git repo
+
+12. **Success Confirmation**: Success message appears with timestamp:
+    ```
+    ✓ Data saved to CSV successfully
+    Timestamp: 2025-01-28T10:30:00
     ```
 
-12. **Next Steps**: User can:
+13. **Data Storage**: Form data permanently stored in https://github.com/jmrdevops/FCUBS_CASA.git as CSV
+
+14. **Next Steps**: User can:
     - Reset form and enter new data
     - Select different service from dropdown
     - Go back to home page
+    - View all submissions in FCUBS_CASA repo
 
 ---
 
@@ -578,12 +665,16 @@ E:\FLEXCUBE_AUTOMATION\
 ```
 
 ### **Technology Stack**
-- **Framework**: Next.js 15 (App Router)
-- **Language**: TypeScript
+- **Frontend Framework**: Next.js 15 (App Router)
+- **Frontend Language**: TypeScript
+- **Backend Framework**: FastAPI (Python)
+- **Backend Language**: Python 3.13
 - **Styling**: Tailwind CSS
-- **State**: React useState
+- **State Management**: React useState
 - **Routing**: Next.js dynamic routes
 - **File I/O**: Node.js fs module (server-side only)
+- **Data Storage**: Git repository (GitHub)
+- **API Communication**: REST (HTTP/JSON)
 
 ---
 
@@ -601,13 +692,15 @@ E:\FLEXCUBE_AUTOMATION\
 
 **The entire process in one sentence:**
 
-User selects a service → Schema fetched from swagger.json → Parser extracts fields → Dynamic form generated → User fills & submits → Data displayed in JSON format.
+User selects a service → Schema fetched from swagger.json → Parser extracts fields → Dynamic form generated → User fills & submits → Data sent to FastAPI backend → Stored in FCUBS_CASA git repository.
 
-**Key Innovation:**
+**Key Innovations:**
 
-Zero manual form creation - everything is automatically generated from existing Swagger API documentation.
+1. Zero manual form creation - automatically generated from Swagger API documentation
+2. Decentralized data storage - form submissions stored in version-controlled git repository
+3. Multi-service support - handles 266+ FLEXCUBE services dynamically
 
 ---
 
-**Last Updated**: 2025-01-22
-**Version**: 1.0
+**Last Updated**: 2025-10-28
+**Version**: 2.0
