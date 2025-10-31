@@ -14,11 +14,13 @@ export function parseSwaggerSchema(swagger: SwaggerSchema, serviceName: string):
     Object.entries(swagger.paths).forEach(([path, pathItem]: [string, any]) => {
       Object.entries(pathItem).forEach(([method, operation]: [string, any]) => {
         if (typeof operation === 'object' && operation.summary) {
-          endpoints.push({
-            path: (swagger.basePath || '') + path,
-            method: method.toUpperCase(),
-            summary: operation.summary
-          });
+           const normalizedBase = (swagger.basePath || '').replace(/\/+$/, '');
+           const normalizedPath = path.replace(/^\/+/, '');
+           endpoints.push({
+             path: normalizedBase + '/' + normalizedPath,
+             method: method.toUpperCase(),
+             summary: operation.summary
+           });
         }
       });
     });
